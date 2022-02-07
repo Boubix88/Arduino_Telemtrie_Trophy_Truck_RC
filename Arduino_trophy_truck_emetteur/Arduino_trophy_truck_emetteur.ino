@@ -8,6 +8,7 @@
 
 #define PIN_NTC A0
 #define PIN_TENSION A1
+#define PIN_SWITCH A2 //Switch demarreur
 
 float value1, value2=0;
 float rev1, rev2=0;
@@ -18,6 +19,10 @@ int vitesse;
 float vin = 0.0;
 int TensionBatterie = 0;
 int pourcentageBatterie = 0;
+
+//Switch
+bool switchStarter = false;
+bool switchContact = false;
 
 const int R1 = 2;
 const int R2 = 3;
@@ -90,6 +95,22 @@ void setup ()
  
 void loop ()
 {
+  if (analogRead(PIN_SWITCH) > 800 && !switchStarter){ //Si position switch demarreur 2 => on
+    switchStarter = true;
+  } else if (analogRead(PIN_SWITCH) < 800){ //Switch demarreur position 1 => off
+    switchStarter = false;
+    switchContact = true;
+  } else if (analogRead(PIN_SWITCH) < 500){
+    switchStarter = false;
+    switchContact = false;
+  }
+  if (switchStarter){
+    digitalWrite(8, HIGH); //5v sur D5 => switch demarreur activé
+  }
+  if (switchContact){
+    digitalWrite(7, HIGH); //5v sur D4 => switch contact activé
+  }
+    
   int valeur[4];
   temperatureCalcul();
   //Capteur 1 : RPM
