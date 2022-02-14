@@ -8,7 +8,9 @@
 
 #define PIN_NTC A0
 #define PIN_TENSION A1
-#define PIN_SWITCH A2 //Switch demarreur
+#define PIN_SWITCH 5 //Switch demarreur
+#define PIN_CONTACT 4
+#define PIN_DEMARREUR 7
 
 float value1, value2=0;
 float rev1, rev2=0;
@@ -23,6 +25,7 @@ int pourcentageBatterie = 0;
 //Switch
 bool switchStarter = false;
 bool switchContact = false;
+int channel4;
 
 const int R1 = 2;
 const int R2 = 3;
@@ -85,30 +88,62 @@ void tension(){
   }
 }
 
+void displayDebug(){
+  /*Serial.print("Valeur switch : ");
+  Serial.println(channel4);*/
+
+  /*Serial.print("RPM : ");
+  Serial.println(rpm1, DEC);*/
+
+  /*Serial.print("Tension batterie : ");
+  Serial.println(vin);
+  
+  Serial.print("Temperature : ");
+  Serial.println(valeur[2]);
+
+  Serial.print("RPM : ");
+  Serial.println(valeur[0]);
+
+  Serial.print("Vitesse : ");
+  Serial.println(valeur[1]);*/
+}
+
 void setup ()
 {
   Serial.begin(9600);
   vw_setup(500);
   attachInterrupt(0, isr1, RISING);
   attachInterrupt(1, isr2, RISING);
+  pinMode(PIN_SWITCH, INPUT);  // ch4 sur Arduino pin5 switch
+  pinMode(PIN_CONTACT, OUTPUT);
+  pinMode(PIN_DEMARREUR, OUTPUT);
 }
  
 void loop ()
 {
-  if (analogRead(PIN_SWITCH) > 800 && !switchStarter){ //Si position switch demarreur 2 => on
+  channel4 = pulseIn(PIN_SWITCH, HIGH, 25000); // Lire ch1 (25 ms)
+  if (channel4 > 1500 && channel4 < 1700){ //Si position switch 2 demarreur => on, contact => on
     switchStarter = true;
-  } else if (analogRead(PIN_SWITCH) < 800){ //Switch demarreur position 1 => off
+  } else if (channel4 > 1350 && channel4 < 1500){ //Switch demarreur position 1 => demarreur => off, contact => on
     switchStarter = false;
     switchContact = true;
-  } else if (analogRead(PIN_SWITCH) < 500){
+  } else if (channel4 > 1100 && channel4 < 1350){ //Switch demarreur position 0 => tout => off
     switchStarter = false;
     switchContact = false;
   }
   if (switchStarter){
-    digitalWrite(8, HIGH); //5v sur D5 => switch demarreur activé
+    digitalWrite(PIN_DEMARREUR, HIGH); //5v sur D7 => switch demarreur activé
+    /*Serial.print("Switch Demarreur ");
+    Serial.println(switchStarter);*/
+  } else {
+    digitalWrite(PIN_DEMARREUR, LOW);
   }
   if (switchContact){
-    digitalWrite(7, HIGH); //5v sur D4 => switch contact activé
+    digitalWrite(PIN_CONTACT, HIGH); //5v sur D4 => switch contact activé 
+    /*Serial.print("Switch Contact ");
+    Serial.println(switchContact);*/
+  } else {
+    digitalWrite(PIN_CONTACT, LOW);
   }
     
   int valeur[4];
@@ -119,8 +154,7 @@ void loop ()
   rpm1=(rev1/time1)*60000;         //calculates rpm
   oldtime1=millis();             //saves the current time
   rev1=0;
-  /*Serial.print("RPM : ");
-  Serial.println(rpm1, DEC);*/
+  
   attachInterrupt(0, isr1, RISING);
 
   //Capteur 2 : Vitesse
@@ -141,18 +175,7 @@ void loop ()
 
   vw_send((byte*)&valeur,sizeof(valeur)); 
   if (vw_tx_active() == true){
-    Serial.println("Transmission effectuée");
+    //Serial.println("Transmission effectuée");
   }
-  Serial.print("Tension batterie : ");
-  Serial.println(vin);
-  
-  Serial.print("Temperature : ");
-  Serial.println(valeur[2]);
-
-  Serial.print("RPM : ");
-  Serial.println(valeur[0]);
-
-  Serial.print("Vitesse : ");
-  Serial.println(valeur[1]);
   vw_wait_tx();
 }
