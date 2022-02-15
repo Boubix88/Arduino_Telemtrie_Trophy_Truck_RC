@@ -121,6 +121,7 @@ void setup ()
  
 void loop ()
 {
+  //displayDebug();
   channel4 = pulseIn(PIN_SWITCH, HIGH, 25000); // Lire ch1 (25 ms)
   if (channel4 > 1500 && channel4 < 1700){ //Si position switch 2 demarreur => on, contact => on
     switchStarter = true;
