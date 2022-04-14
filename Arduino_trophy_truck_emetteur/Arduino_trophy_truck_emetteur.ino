@@ -117,6 +117,7 @@ void setup ()
   pinMode(PIN_SWITCH, INPUT);  // ch4 sur Arduino pin5 switch
   pinMode(PIN_CONTACT, OUTPUT);
   pinMode(PIN_DEMARREUR, OUTPUT);
+  switchContact = true;
 }
  
 void loop ()
@@ -127,10 +128,10 @@ void loop ()
     switchStarter = true;
   } else if (channel4 > 1350 && channel4 < 1500){ //Switch demarreur position 1 => demarreur => off, contact => on
     switchStarter = false;
-    switchContact = true;
+    switchContact = false;
   } else if (channel4 > 1100 && channel4 < 1350){ //Switch demarreur position 0 => tout => off
     switchStarter = false;
-    switchContact = false;
+    switchContact = true;
   }
   if (switchStarter){
     digitalWrite(PIN_DEMARREUR, HIGH); //5v sur D7 => switch demarreur activé
