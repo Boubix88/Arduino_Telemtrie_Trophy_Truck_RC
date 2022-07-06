@@ -89,40 +89,26 @@ void tension(){
 }
 
 void displayDebug(){
-  /*Serial.print("Valeur switch : ");
-  Serial.println(channel4);*/
+  Serial.print("Valeur switch : ");
+  Serial.println(channel4);
 
-  /*Serial.print("RPM : ");
-  Serial.println(rpm1, DEC);*/
+  Serial.print("RPM : ");
+  Serial.println(rpm1, DEC);
 
-  /*Serial.print("Tension batterie : ");
+  Serial.print("Tension batterie : ");
   Serial.println(vin);
   
   Serial.print("Temperature : ");
-  Serial.println(valeur[2]);
+  Serial.println(celsius);
 
   Serial.print("RPM : ");
-  Serial.println(valeur[0]);
+  Serial.println(rpm1);
 
   Serial.print("Vitesse : ");
-  Serial.println(valeur[1]);*/
+  Serial.println(vitesse);
 }
 
-void setup ()
-{
-  Serial.begin(9600);
-  vw_setup(500);
-  attachInterrupt(0, isr1, RISING);
-  attachInterrupt(1, isr2, RISING);
-  pinMode(PIN_SWITCH, INPUT);  // ch4 sur Arduino pin5 switch
-  pinMode(PIN_CONTACT, OUTPUT);
-  pinMode(PIN_DEMARREUR, OUTPUT);
-  switchContact = true;
-}
- 
-void loop ()
-{
-  //displayDebug();
+void checkSwitch(){
   channel4 = pulseIn(PIN_SWITCH, HIGH, 25000); // Lire ch1 (25 ms)
   if (channel4 > 1500 && channel4 < 1700){ //Si position switch 2 demarreur => on, contact => on
     switchStarter = true;
@@ -147,8 +133,25 @@ void loop ()
   } else {
     digitalWrite(PIN_CONTACT, LOW);
   }
-    
-  int valeur[4];
+}
+
+void setup ()
+{
+  Serial.begin(9600);
+  vw_setup(500);
+  attachInterrupt(0, isr1, RISING);
+  attachInterrupt(1, isr2, RISING);
+  pinMode(PIN_SWITCH, INPUT);  // ch4 sur Arduino pin5 switch
+  pinMode(PIN_CONTACT, OUTPUT);
+  pinMode(PIN_DEMARREUR, OUTPUT);
+  switchContact = true;
+}
+ 
+void loop ()
+{
+  displayDebug();
+  checkSwitch();
+  int valeur[6];
   temperatureCalcul();
   //Capteur 1 : RPM
   detachInterrupt(0);           //detaches the interrupt
@@ -175,9 +178,27 @@ void loop ()
   tension();
   valeur[3] = pourcentageBatterie;
 
+  switch (switchContact){
+    case true:
+      valeur[4] = 1;
+      break;
+    default :
+      valeur[4] = 0;
+      break;
+  }
+
+  switch (switchStarter){
+    case true:
+      valeur[5] = 1;
+      break;
+    default :
+      valeur[5] = 0;
+      break;
+  }
+
   vw_send((byte*)&valeur,sizeof(valeur)); 
   if (vw_tx_active() == true){
-    //Serial.println("Transmission effectuée");
+    Serial.println("Transmission effectuée");
   }
   vw_wait_tx();
 }

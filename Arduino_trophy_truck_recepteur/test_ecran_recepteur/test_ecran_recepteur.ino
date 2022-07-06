@@ -83,6 +83,9 @@ void tension(){
    }
    pourcentageBatterie = ((vin - 3.7)/(4.12-3.7))*100;
 
+   Serial.print("Batterie : " );
+   Serial.println(vin);
+
   if (pourcentageBatterie > 100){
     pourcentageBatterie = 100;
   }else if(pourcentageBatterie < 0){
@@ -100,6 +103,7 @@ void afficherEcran1(){
     afficherSignal2();
   }else {
     afficherSignal1();
+    Serial.print("Test reception");
     u8g2.setCursor(64,38);
     u8g2.setFont(u8g2_font_osb18_tn);  
     u8g2.print(valeur[0]);
@@ -181,6 +185,7 @@ void setup(){
 void loop(){
   u8g2.firstPage();
   do{ 
+    Serial.println("test");
     if (analogRead(PIN_BOUTTON) == 0){
       timerEcran = 1;
         while (timerEcran != 0){
