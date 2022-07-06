@@ -89,6 +89,12 @@ void tension(){
 }
 
 void displayDebug(){
+  Serial.print("Contact : ");
+  Serial.println(!switchContact);
+
+  Serial.print("Starter : ");
+  Serial.println(switchStarter);
+
   Serial.print("Valeur switch : ");
   Serial.println(channel4);
 
@@ -138,7 +144,7 @@ void checkSwitch(){
 void setup ()
 {
   Serial.begin(9600);
-  vw_setup(500);
+  vw_setup(400);
   attachInterrupt(0, isr1, RISING);
   attachInterrupt(1, isr2, RISING);
   pinMode(PIN_SWITCH, INPUT);  // ch4 sur Arduino pin5 switch
@@ -149,9 +155,9 @@ void setup ()
  
 void loop ()
 {
+  int valeur[6];
   displayDebug();
   checkSwitch();
-  int valeur[6];
   temperatureCalcul();
   //Capteur 1 : RPM
   detachInterrupt(0);           //detaches the interrupt
@@ -179,7 +185,7 @@ void loop ()
   valeur[3] = pourcentageBatterie;
 
   switch (switchContact){
-    case true:
+    case false:
       valeur[4] = 1;
       break;
     default :
