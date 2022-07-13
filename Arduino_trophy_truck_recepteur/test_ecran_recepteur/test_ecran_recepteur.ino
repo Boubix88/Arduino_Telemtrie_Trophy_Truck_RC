@@ -3,7 +3,6 @@
 #include <VirtualWire.h>
 #include <Wire.h>
 #include <stdio.h>
-#include <OneButton.h>
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 //Définition des pin d'entrée
@@ -15,22 +14,13 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 #define POLICE_PRINCIPALE u8g2_font_osb18_tn
 #define POLICE_VOYANTS u8g2_font_open_iconic_all_2x_t
 #define POLICE_CHIFFRES u8g2_font_lubR18_tr
-
-/*OneButton btn = OneButton(
-  BUTTON_PIN,  // Input pin for the button
-  true,        // Button is active LOW
-  true         // Enable internal pull-up resistor
-);*/
+#define POLICE_PETITE u8g2_font_profont11_mr
 
 //Variables pour la reception du signal
 int valeur[6];
 byte wireless = sizeof(valeur);
 
-int timerEcran = 0;
-float vin = 0.0;
-float R1 = 98100.0; // Résistance de R1 (100K)
-float R2 = 9870.0; // Résistance de R2 (10K)
-int TensionBatterie = 0;
+//int timerEcran = 0;
 int pourcentageBatterie = 0;
 
 //Pour ecran 3
@@ -39,10 +29,9 @@ int vitesseMax = 0;
 int temperatureMax = 0;
 float tempsDeRoulage = 0;
 
-
 void pre(){
   u8g2.setDrawColor(0);
-  u8g2.setFont(u8g2_font_profont11_mr);    
+  u8g2.setFont(POLICE_PETITE);    
   u8g2.drawStr(0, 12, "Trophy Truck");
 }
 
@@ -79,6 +68,16 @@ void initAffichage2(){
   afficherBatterieTemperature();
 }
 
+void initAffichage3(){
+  pre();
+  u8g2.setDrawColor(1);
+  u8g2.setFont(POLICE_PETITE);    
+  u8g2.drawStr(0, 24, "rpmMax :");
+  u8g2.drawStr(0, 37, "vMax :");
+  u8g2.drawStr(0, 50, "tempMax :");
+  u8g2.drawStr(0, 63, "tpsRoulage :");
+}
+
 void afficherSignal1(){
   u8g2.setDrawColor(1);
   u8g2.setFont(POLICE_VOYANTS);  
@@ -99,6 +98,8 @@ void afficherSignal2(){
 }
 
 void tension(){
+  int TensionBatterie = 0;
+  float vin = 0.0;
   // BATTERIE -- Lecture de la tension de la batterie sur le Pin A0
    TensionBatterie = analogRead(PIN_TENSION);
    vin = (TensionBatterie*4.75)/1000; 
@@ -107,8 +108,8 @@ void tension(){
    }
    pourcentageBatterie = ((vin - 3.7)/(4.12-3.7))*100;
 
-   Serial.print("Batterie : " );
-   Serial.println(vin);
+   /*Serial.print(F("Batterie : "));
+   Serial.println(vin);*/
 
   if (pourcentageBatterie > 100){
     pourcentageBatterie = 100;
@@ -119,7 +120,7 @@ void tension(){
 
 void afficherEcran1(){  
   //On attend max 1s de recevoir un message
-  vw_wait_rx_max(1000);
+  vw_wait_rx_max(600);
 
   initAffichage1();
 
@@ -127,7 +128,6 @@ void afficherEcran1(){
     afficherSignal2();
   }else {
     afficherSignal1();
-    //Serial.print("Test reception");
     char text[5];
     sprintf(text, "%d", valeur[0]);  
     u8g2.setCursor(64,38);
@@ -142,7 +142,7 @@ void afficherEcran1(){
 
 void afficherEcran2(){
   //On attend max 1s de recevoir un message
-  vw_wait_rx_max(1000);
+  vw_wait_rx_max(600);
   tension();
   
   initAffichage2();
@@ -164,19 +164,14 @@ void afficherEcran2(){
 
 void afficherEcran3(){
   //On attend max 1s de recevoir un message
-  vw_wait_rx_max(1000);
+  vw_wait_rx_max(600);
 
-  initAffichage1();
+  initAffichage3();
 
   if (vw_get_message((byte*)&valeur, &wireless) == false){
     afficherSignal2();
   }else {
     afficherSignal1();
-    u8g2.setFont(u8g2_font_Pixellari_tr);    
-    u8g2.drawStr(0, 25, "rpmMax : ");
-    u8g2.drawStr(0, 38, "vMax : ");
-    u8g2.drawStr(0, 51, "tempMax : ");
-    u8g2.drawStr(0, 64, "tpsRoulage : ");
   }
 }
 
@@ -231,56 +226,39 @@ void calculDonnees(){
   }
 }
 
-static void handleClick() {
-  Serial.println("Clicked!");
-  if (timerEcran == 0){
-    timerEcran = 1;
-  } else if (timerEcran == 1){
-    timerEcran = 2;
-  } else if (timerEcran == 2){
-    timerEcran = 0;
-  }
-}
-
 void setup(){
   Serial.begin(9600);
   vw_setup(400);
   vw_rx_start();
   u8g2.begin();
   u8g2.enableUTF8Print();
-  //btn.attachClick(handleClick);
 }
 
 void loop(){
-  //while (timerEcran == 0){
-  if (timerEcran == 3){
-    timerEcran = 0;
+  while (analogRead(BUTTON_PIN) != 0){
+    Serial.println(F("Ecran 1"));
+    u8g2.clearBuffer();
+    afficherEcran1();
+    u8g2.sendBuffer();
   }
-    Serial.println("Timer : ");
-    Serial.print(timerEcran);
-    u8g2.clearBuffer();
-    switch (timerEcran){
-      case 0:
-        afficherEcran1();
-        break;
-    }    
-    u8g2.sendBuffer();
-    if (analogRead(BUTTON_PIN) == 0){
-      timerEcran += 1;
-    }
 
-    delay(2000);
-    Serial.println("Timer : ");
-    Serial.print(timerEcran);
+  delay(500);
+
+  while (analogRead(BUTTON_PIN) != 0){
+    Serial.println(F("Ecran 2"));
     u8g2.clearBuffer();
-    switch (timerEcran){
-      case 0:
-        afficherEcran2();
-        break;
-    }    
+    afficherEcran2();
     u8g2.sendBuffer();
-    if (analogRead(BUTTON_PIN) == 0){
-      timerEcran += 1;
-    }
-    delay(2000);
+  }
+
+  delay(500);
+
+  /*while (analogRead(BUTTON_PIN) != 0){
+    Serial.println(F("Ecran 3"));
+    u8g2.clearBuffer();
+    afficherEcran3();
+    u8g2.sendBuffer();
+  }
+
+  delay(500);*/
 }

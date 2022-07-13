@@ -48,8 +48,7 @@ void isr1()
   rev1++;
 }
 
-double SteinhartHart(double R)
-{
+double SteinhartHart(double R){
   //Division de l'équation en 4 parties. La premiere est 
   //uniquement A1
   double equationB1 = B_1 * log(R/Rref);
@@ -73,13 +72,15 @@ void temperatureCalcul(){
 }
 
 void tension(){
-   //BATTERIE -- Lecture de la tension de la batterie sur le Pin A1
+   //Calcul de la tension de la batterie
    TensionBatterie = analogRead(PIN_TENSION);
-   vin = (TensionBatterie*12.25)/1000; 
-   if (vin<0.09) {
-      vin=0.0;  //Déclaration pour annuler la lecture indésirable !
+   vin = (TensionBatterie * 12.6) / 1000; 
+   Serial.print("Tension entrée : ");
+   Serial.println(vin);
+   if (vin < 0.09) {
+      vin = 0.0;  //Déclaration pour annuler la lecture indésirable !
    }
-   pourcentageBatterie = ((vin - 11.1)/(12.2-11.1))*100;
+   pourcentageBatterie = ((vin - 11.1) / (12.6 - 11.1)) * 100;
 
   if (pourcentageBatterie > 100){
     pourcentageBatterie = 100;
@@ -156,7 +157,7 @@ void setup ()
 void loop ()
 {
   int valeur[6];
-  displayDebug();
+  //displayDebug();
   checkSwitch();
   temperatureCalcul();
   //Capteur 1 : RPM
