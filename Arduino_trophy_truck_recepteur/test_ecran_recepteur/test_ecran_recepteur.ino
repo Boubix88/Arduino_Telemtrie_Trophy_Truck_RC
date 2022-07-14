@@ -129,6 +129,32 @@ void tension(){
   }
 }
 
+void afficherTransition(){
+  u8g2.setDrawColor(1);
+  for (int i = 0; i < 15; i++){
+    u8g2.clearBuffer();
+    u8g2.drawDisc(128/2, 64/2, i*5, U8G2_DRAW_ALL);
+    u8g2.sendBuffer();
+  }
+}
+
+void afficherEcranDemarrage(){
+  u8g2.setDrawColor(1);
+  for (int i = 0; i < 25; i++){
+    u8g2.clearBuffer();
+    u8g2.setFont(POLICE_PETITE);    
+    u8g2.setCursor(30,12);
+    u8g2.print(F("Trophy Truck"));
+
+    u8g2.setFont(POLICE_VOYANTS); 
+    u8g2.drawGlyph(55, 40, 235);
+
+    u8g2.drawFrame(25, 50, i*3, 2);
+    u8g2.sendBuffer();
+    delay(50);
+  }
+}
+
 void afficherEcran1(){  
   //On attend max 1s de recevoir un message
   vw_wait_rx_max(600);
@@ -268,6 +294,7 @@ void setup(){
   vw_rx_start();
   u8g2.begin();
   u8g2.enableUTF8Print();
+  afficherEcranDemarrage();
 }
 
 void loop(){
@@ -280,6 +307,7 @@ void loop(){
   }
 
   delay(500);
+  afficherTransition();
 
   while (analogRead(BUTTON_PIN) != 0){
     Serial.println(F("Ecran 2"));
@@ -290,6 +318,7 @@ void loop(){
   }
 
   delay(500);
+  afficherTransition();
 
   while (analogRead(BUTTON_PIN) != 0){
     Serial.println(F("Ecran 3"));
@@ -300,4 +329,5 @@ void loop(){
   }
 
   delay(500);
+  afficherTransition();
 }
