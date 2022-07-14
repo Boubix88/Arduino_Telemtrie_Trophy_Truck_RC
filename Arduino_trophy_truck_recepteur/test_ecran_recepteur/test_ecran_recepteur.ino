@@ -20,6 +20,8 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 int valeur[6];
 byte wireless = sizeof(valeur);
 
+float vin = 0.0;
+
 //int timerEcran = 0;
 int pourcentageBatterie = 0;
 
@@ -32,20 +34,24 @@ float tempsDeRoulage = 0;
 void pre(){
   u8g2.setDrawColor(0);
   u8g2.setFont(POLICE_PETITE);    
-  u8g2.drawStr(0, 12, "Trophy Truck");
+  u8g2.setCursor(0,12);
+  u8g2.print(F("Trophy Truck"));
 }
 
 void afficherRpmVitesse(){
   u8g2.setDrawColor(1);
   u8g2.setFont(POLICE_CHIFFRES);  
-  u8g2.drawStr(0, 38, "RPM:");
-  u8g2.drawStr(0, 64, "V:");
+  u8g2.setCursor(0, 38);
+  u8g2.print(F("RPM"));
+  u8g2.setCursor(0, 64);
+  u8g2.print(F("V:"));
 }
 
 void afficherKmh(){
   u8g2.setDrawColor(1);
   u8g2.setFont(u8g2_font_6x12_tr);  
-  u8g2.drawStr(95, 64, "Km/h");
+  u8g2.setCursor(95, 64);
+  u8g2.print(F("Km/h"));
 }
 
 void afficherBatterieTemperature(){
@@ -53,8 +59,10 @@ void afficherBatterieTemperature(){
   u8g2.setFont(POLICE_CHIFFRES);  
   //u8g2.drawGlyph(60, 38, 0x00b0);
   u8g2.drawCircle(72, 21, 2, U8G2_DRAW_ALL);
-  u8g2.drawStr(0, 38, "T:");
-  u8g2.drawStr(75, 38, "C");
+  u8g2.setCursor(0, 38);
+  u8g2.print(F("T:"));
+  u8g2.setCursor(75, 38);
+  u8g2.print(F("C"));
 }
 
 void initAffichage1(){
@@ -71,11 +79,15 @@ void initAffichage2(){
 void initAffichage3(){
   pre();
   u8g2.setDrawColor(1);
-  u8g2.setFont(POLICE_PETITE);    
-  u8g2.drawStr(0, 24, "rpmMax :");
-  u8g2.drawStr(0, 37, "vMax :");
-  u8g2.drawStr(0, 50, "tempMax :");
-  u8g2.drawStr(0, 63, "tpsRoulage :");
+  u8g2.setFont(u8g2_font_6x12_tr);    
+  u8g2.setCursor(0, 24);
+  u8g2.print(F("rpmMax :"));
+  u8g2.setCursor(0, 37);
+  u8g2.print(F("vMax :"));
+  u8g2.setCursor(0, 50);
+  u8g2.print(F("tempMax :"));
+  u8g2.setCursor(0, 63);
+  u8g2.print(F("tpsRoulage :"));
 }
 
 void afficherSignal1(){
@@ -99,7 +111,6 @@ void afficherSignal2(){
 
 void tension(){
   int TensionBatterie = 0;
-  float vin = 0.0;
   // BATTERIE -- Lecture de la tension de la batterie sur le Pin A0
    TensionBatterie = analogRead(PIN_TENSION);
    vin = (TensionBatterie*4.75)/1000; 
@@ -173,11 +184,36 @@ void afficherEcran3(){
   }else {
     afficherSignal1();
   }
+
+  afficherDonnees();
+}
+
+void afficherDonnees(){
+  u8g2.setFont(u8g2_font_6x12_tr);  
+
+  char text[8];
+  sprintf(text, "%d", rpmMax); 
+  u8g2.setCursor(50,24);
+  u8g2.print(text);
+
+  sprintf(text, "%d", vitesseMax); 
+  u8g2.setCursor(40,37);
+  u8g2.print(text);
+
+  sprintf(text, "%d", temperatureMax); 
+  u8g2.setCursor(60,50);
+  u8g2.print(text);
+
+  sprintf(text, "%f", tempsDeRoulage); 
+  u8g2.setCursor(70,63);
+  u8g2.print(text);
 }
 
 void afficherBatterie(){
   u8g2.setFont(u8g2_font_battery19_tn);
-  if (pourcentageBatterie == 0){
+  if (vin >= 4.12){
+    u8g2.drawGlyph(110, 64, 54);
+  }else if (pourcentageBatterie == 0){
     u8g2.drawGlyph(110, 64, 48);
   }else if (pourcentageBatterie > 0 && pourcentageBatterie <= 20){
     u8g2.drawGlyph(110, 64, 49);
@@ -212,9 +248,9 @@ void afficherBatterie(){
 }
 
 void calculDonnees(){
-  /*if (valeur[5] == 1){
+  if (valeur[5] == 1){
     tempsDeRoulage += 0.24;
-  }*/
+  }
   if (valeur[0] > rpmMax){
     rpmMax = valeur[0];
   }
@@ -238,6 +274,7 @@ void loop(){
   while (analogRead(BUTTON_PIN) != 0){
     Serial.println(F("Ecran 1"));
     u8g2.clearBuffer();
+    calculDonnees();
     afficherEcran1();
     u8g2.sendBuffer();
   }
@@ -247,18 +284,20 @@ void loop(){
   while (analogRead(BUTTON_PIN) != 0){
     Serial.println(F("Ecran 2"));
     u8g2.clearBuffer();
+    calculDonnees();
     afficherEcran2();
     u8g2.sendBuffer();
   }
 
   delay(500);
 
-  /*while (analogRead(BUTTON_PIN) != 0){
+  while (analogRead(BUTTON_PIN) != 0){
     Serial.println(F("Ecran 3"));
     u8g2.clearBuffer();
+    calculDonnees();
     afficherEcran3();
     u8g2.sendBuffer();
   }
 
-  delay(500);*/
+  delay(500);
 }
