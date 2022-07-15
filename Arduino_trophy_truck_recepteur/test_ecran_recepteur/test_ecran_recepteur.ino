@@ -1,7 +1,7 @@
-#include <Arduino.h>
+#include <Wire.h>
 #include <U8g2lib.h>
 #include <VirtualWire.h>
-#include <Wire.h>
+#include <Arduino.h>
 #include <stdio.h>
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
@@ -15,6 +15,17 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 #define POLICE_VOYANTS u8g2_font_open_iconic_all_2x_t
 #define POLICE_CHIFFRES u8g2_font_lubR18_tr
 #define POLICE_PETITE u8g2_font_profont11_mr
+
+const unsigned char Engine[] PROGMEM = {
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78, 0x48, 0x48,
+  0xC8, 0x08, 0x08, 0xC8, 0x48, 0x48, 0x78, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0xE0, 0x20, 0x20, 0xE0, 0x00, 0xC0, 0x60, 0x20, 0x20, 0x30, 0x18, 0x0C, 0x02, 0x02, 0x02, 0x02,
+  0xC3, 0xE2, 0x62, 0x23, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0xFE, 0x80, 0xF0, 0x10, 0x10, 0xF0,
+  0xFF, 0x80, 0x80, 0xFB, 0x0A, 0x7F, 0xC0, 0x80, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x07,
+  0x47, 0x3D, 0x0C, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x70, 0x10, 0x78, 0x40, 0x40, 0x7F,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x0C, 0x08, 0x08, 0x08, 0x08,
+  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x04, 0x06, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
 
 //Variables pour la reception du signal
 int valeur[6];
@@ -131,10 +142,16 @@ void tension(){
 
 void afficherTransition(){
   u8g2.setDrawColor(1);
-  for (int i = 0; i < 15; i++){
+  for (int i = 0; i < 8; i++){
     u8g2.clearBuffer();
-    u8g2.drawDisc(128/2, 64/2, i*5, U8G2_DRAW_ALL);
+    u8g2.setFont(u8g2_font_streamline_interface_essential_action_t);
+    u8g2.drawGlyph(55, 40, 53);
+    u8g2.setFont(POLICE_PETITE);  
+    u8g2.setCursor(38,62);
+    u8g2.print(F("Chargement"));
+    //u8g2.drawDisc(128/2, 64/2, i*5, U8G2_DRAW_ALL);
     u8g2.sendBuffer();
+    delay(50);
   }
 }
 
@@ -155,25 +172,41 @@ void afficherEcranDemarrage(){
   }
 }
 
+void afficherDemarrage(){
+  //u8g2.drawBitmap(48, 20, 4, 32, Engine);
+  u8g2.setDrawColor(1);
+  u8g2.setFont(u8g2_font_streamline_interface_essential_cog_t);
+  u8g2.drawGlyph(54, 45, 49);
+  u8g2.setFont(POLICE_PETITE);  
+  u8g2.setCursor(40, 61);
+  u8g2.print(F("Demarrage"));
+}
+
 void afficherEcran1(){  
   //On attend max 1s de recevoir un message
   vw_wait_rx_max(600);
 
-  initAffichage1();
-
   if (vw_get_message((byte*)&valeur, &wireless) == false){
     afficherSignal2();
+    initAffichage1();
   }else {
     afficherSignal1();
-    char text[5];
-    sprintf(text, "%d", valeur[0]);  
-    u8g2.setCursor(64,38);
-    u8g2.setFont(POLICE_PRINCIPALE);  
-    u8g2.print(text);
+    if (valeur[5] == 1){
+      pre();
+      afficherDemarrage();
+    }
+    else { 
+      initAffichage1();
+      char text[5];
+      sprintf(text, "%d", valeur[0]);  
+      u8g2.setCursor(64,38);
+      u8g2.setFont(POLICE_PRINCIPALE);  
+      u8g2.print(text);
 
-    sprintf(text, "%d", valeur[1]);  
-    u8g2.setCursor(35,64);
-    u8g2.print(text);
+      sprintf(text, "%d", valeur[1]);  
+      u8g2.setCursor(35,64);
+      u8g2.print(text);
+    }
   }
 }
 
@@ -181,21 +214,27 @@ void afficherEcran2(){
   //On attend max 1s de recevoir un message
   vw_wait_rx_max(600);
   tension();
-  
-  initAffichage2();
-  
-  afficherBatterie();
 
   if (vw_get_message((byte*)&valeur, &wireless) == false){
     afficherSignal2();
+    initAffichage2();
+  afficherBatterie();
   } else {
     afficherSignal1();
-    u8g2.setFont(POLICE_PRINCIPALE);
-  
-    char text[3];
-    sprintf(text, "%d", valeur[2]); 
-    u8g2.setCursor(30,38); 
-    u8g2.print(text);
+    if (valeur[5] == 1){
+      pre();
+      afficherDemarrage();
+    }
+    else { 
+      initAffichage2();
+      afficherBatterie();
+      u8g2.setFont(POLICE_PRINCIPALE);
+    
+      char text[3];
+      sprintf(text, "%d", valeur[2]); 
+      u8g2.setCursor(30,38); 
+      u8g2.print(text);
+    }
   }
 }
 
@@ -203,15 +242,20 @@ void afficherEcran3(){
   //On attend max 1s de recevoir un message
   vw_wait_rx_max(600);
 
-  initAffichage3();
-
   if (vw_get_message((byte*)&valeur, &wireless) == false){
     afficherSignal2();
+    initAffichage3();
+    afficherDonnees();
   }else {
     afficherSignal1();
+    if (valeur[5] == 1){
+      pre();
+      afficherDemarrage();
+    } else {
+      initAffichage3();
+      afficherDonnees();
+    }
   }
-
-  afficherDonnees();
 }
 
 void afficherDonnees(){
@@ -230,8 +274,10 @@ void afficherDonnees(){
   u8g2.setCursor(60,50);
   u8g2.print(text);
 
-  sprintf(text, "%f", tempsDeRoulage); 
-  u8g2.setCursor(70,63);
+  sprintf(text, "%d", (char)tempsDeRoulage); 
+  Serial.print(F("Temps : "));
+  Serial.println(text);
+  u8g2.setCursor(75,63);
   u8g2.print(text);
 }
 
@@ -275,7 +321,7 @@ void afficherBatterie(){
 
 void calculDonnees(){
   if (valeur[5] == 1){
-    tempsDeRoulage += 0.24;
+    tempsDeRoulage += 0.36;
   }
   if (valeur[0] > rpmMax){
     rpmMax = valeur[0];
