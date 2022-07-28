@@ -2,7 +2,6 @@
 #include <U8g2lib.h>
 #include <VirtualWire.h>
 #include <Arduino.h>
-#include <stdio.h>
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 //Définition des pin d'entrée
@@ -12,19 +11,28 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 // SDA --> A4
 
 #define POLICE_PRINCIPALE u8g2_font_osb18_tn
-#define POLICE_VOYANTS u8g2_font_open_iconic_all_2x_t
 #define POLICE_CHIFFRES u8g2_font_lubR18_tr
 #define POLICE_PETITE u8g2_font_profont11_mr
 
-const unsigned char Engine[] PROGMEM = {
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78, 0x48, 0x48,
-  0xC8, 0x08, 0x08, 0xC8, 0x48, 0x48, 0x78, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0xE0, 0x20, 0x20, 0xE0, 0x00, 0xC0, 0x60, 0x20, 0x20, 0x30, 0x18, 0x0C, 0x02, 0x02, 0x02, 0x02,
-  0xC3, 0xE2, 0x62, 0x23, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0xFE, 0x80, 0xF0, 0x10, 0x10, 0xF0,
-  0xFF, 0x80, 0x80, 0xFB, 0x0A, 0x7F, 0xC0, 0x80, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x07,
-  0x47, 0x3D, 0x0C, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x70, 0x10, 0x78, 0x40, 0x40, 0x7F,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x0C, 0x08, 0x08, 0x08, 0x08,
-  0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x04, 0x06, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+//Pour générer un bitmap, ouvrir l'image avec GIMP et l'exporter en .xbm
+static const unsigned char Engine[] PROGMEM = {
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0xe0, 0x7f, 0x00, 0x00, 0x60, 0x60, 0x00, 0x00, 0x20, 0x40, 0x00,
+  0x00, 0xe0, 0x79, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x0d, 0x00,
+  0x00, 0xf0, 0xff, 0x07, 0x00, 0x08, 0x00, 0x0c, 0x00, 0x0c, 0x00, 0x0c,
+  0x00, 0x06, 0x00, 0xfc, 0xcf, 0x03, 0x0e, 0xfc, 0x6d, 0x00, 0x07, 0x9c,
+  0x29, 0x00, 0x07, 0x9c, 0x29, 0x80, 0x03, 0x98, 0x39, 0x80, 0x03, 0x80,
+  0x21, 0xc0, 0x0f, 0x80, 0x39, 0x00, 0x06, 0x9c, 0x29, 0x00, 0x06, 0x9c,
+  0x29, 0x00, 0x03, 0x9c, 0x69, 0x00, 0x01, 0xf6, 0xef, 0x03, 0x00, 0xf3,
+  0x00, 0x06, 0x00, 0x01, 0x00, 0x04, 0x80, 0x00, 0x00, 0x0c, 0x40, 0x00,
+  0x00, 0xf8, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+static const unsigned char Fan[] PROGMEM = {
+  0x00, 0x00, 0xc0, 0x07, 0xc0, 0x07, 0xc0, 0x03, 0xc0, 0x01, 0x06, 0x00,
+  0x8e, 0x79, 0xde, 0x79, 0xde, 0x79, 0x0e, 0x71, 0x00, 0x60, 0x80, 0x03,
+  0xc0, 0x03, 0xe0, 0x03, 0xe0, 0x03, 0x00, 0x00
 };
 
 //Variables pour la reception du signal
@@ -32,8 +40,6 @@ int valeur[6];
 byte wireless = sizeof(valeur);
 
 float vin = 0.0;
-
-//int timerEcran = 0;
 int pourcentageBatterie = 0;
 
 //Pour ecran 3
@@ -43,10 +49,10 @@ int temperatureMax = 0;
 float tempsDeRoulage = 0;
 
 void pre(){
-  u8g2.setDrawColor(0);
+  //u8g2.setDrawColor(0);
   u8g2.setFont(POLICE_PETITE);    
   u8g2.setCursor(0,12);
-  u8g2.print(F("Trophy Truck"));
+  u8g2.print(F("RC"));
 }
 
 void afficherRpmVitesse(){
@@ -102,22 +108,29 @@ void initAffichage3(){
 }
 
 void afficherSignal1(){
-  u8g2.setDrawColor(1);
-  u8g2.setFont(POLICE_VOYANTS);  
-
+  u8g2.setDrawColor(1); 
+  u8g2.setFont(u8g2_font_unifont_t_77); 
+  u8g2.drawGlyph(18, 15, 9981); //Affiche un icone de pompe à essence
+  u8g2.drawXBMP(37, 0, 16, 16, Fan); //Ventilo 1
+  if (valeur[2] > 28){
+    u8g2.drawXBMP(56, 0, 16, 16, Fan); //Ventilo 2
+  }
   if (valeur[4] == 1){
-    u8g2.drawGlyph(75, 16, 193); //Affiche un icone de clef
+    u8g2.setFont(u8g2_font_open_iconic_thing_2x_t); 
+    u8g2.drawGlyph(75, 16, 67); //Affiche un icone de clef
   }
   if (valeur[5] == 1){
-    u8g2.drawGlyph(94, 16, 235); //Affiche un icone de demarrer
+    u8g2.setFont(u8g2_font_open_iconic_embedded_2x_t);
+    u8g2.drawGlyph(94, 16, 78); //Affiche un icone de demarrer
   }
-  u8g2.drawGlyph(112, 16, 247); //Affiche un icone de reseau
+  u8g2.setFont(u8g2_font_open_iconic_www_2x_t);  
+  u8g2.drawGlyph(112, 16, 72); //Affiche un icone de reseau
 }
 
 void afficherSignal2(){
   u8g2.setDrawColor(1);
-  u8g2.setFont(POLICE_VOYANTS);  
-  u8g2.drawGlyph(112, 16, 283);  //Affiche une croix pour le reseau
+  u8g2.setFont(u8g2_font_open_iconic_check_2x_t);  
+  u8g2.drawGlyph(112, 16, 68);  //Affiche une croix pour le reseau
 }
 
 void tension(){
@@ -145,11 +158,10 @@ void afficherTransition(){
   for (int i = 0; i < 8; i++){
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_streamline_interface_essential_action_t);
-    u8g2.drawGlyph(55, 40, 53);
+    u8g2.drawGlyph(55, 37, 53);
     u8g2.setFont(POLICE_PETITE);  
-    u8g2.setCursor(38,62);
+    u8g2.setCursor(38,58);
     u8g2.print(F("Chargement"));
-    //u8g2.drawDisc(128/2, 64/2, i*5, U8G2_DRAW_ALL);
     u8g2.sendBuffer();
     delay(50);
   }
@@ -163,27 +175,25 @@ void afficherEcranDemarrage(){
     u8g2.setCursor(30,12);
     u8g2.print(F("Trophy Truck"));
 
-    u8g2.setFont(POLICE_VOYANTS); 
-    u8g2.drawGlyph(55, 40, 235);
+    u8g2.setFont(u8g2_font_open_iconic_embedded_2x_t);
+    u8g2.drawGlyph(55, 40, 78);
 
-    u8g2.drawFrame(25, 50, i*3, 2);
+    u8g2.drawFrame(25, 55, i*3, 2);
     u8g2.sendBuffer();
     delay(50);
   }
 }
 
 void afficherDemarrage(){
-  //u8g2.drawBitmap(48, 20, 4, 32, Engine);
   u8g2.setDrawColor(1);
-  u8g2.setFont(u8g2_font_streamline_interface_essential_cog_t);
-  u8g2.drawGlyph(54, 45, 49);
+  u8g2.drawXBMP(48, 19, 32, 32, Engine);
   u8g2.setFont(POLICE_PETITE);  
   u8g2.setCursor(40, 61);
   u8g2.print(F("Demarrage"));
 }
 
 void afficherEcran1(){  
-  //On attend max 1s de recevoir un message
+  //On attend max 600ms de recevoir un message
   vw_wait_rx_max(600);
 
   if (vw_get_message((byte*)&valeur, &wireless) == false){
@@ -194,8 +204,7 @@ void afficherEcran1(){
     if (valeur[5] == 1){
       pre();
       afficherDemarrage();
-    }
-    else { 
+    } else { 
       initAffichage1();
       char text[5];
       sprintf(text, "%d", valeur[0]);  
@@ -321,7 +330,7 @@ void afficherBatterie(){
 
 void calculDonnees(){
   if (valeur[5] == 1){
-    tempsDeRoulage += 0.36;
+    tempsDeRoulage += 0.6;
   }
   if (valeur[0] > rpmMax){
     rpmMax = valeur[0];
@@ -345,7 +354,7 @@ void setup(){
 
 void loop(){
   while (analogRead(BUTTON_PIN) != 0){
-    Serial.println(F("Ecran 1"));
+    //Serial.println(F("Ecran 1")); //Debug
     u8g2.clearBuffer();
     calculDonnees();
     afficherEcran1();
@@ -356,7 +365,7 @@ void loop(){
   afficherTransition();
 
   while (analogRead(BUTTON_PIN) != 0){
-    Serial.println(F("Ecran 2"));
+    //Serial.println(F("Ecran 2")); //Debug
     u8g2.clearBuffer();
     calculDonnees();
     afficherEcran2();
@@ -367,7 +376,7 @@ void loop(){
   afficherTransition();
 
   while (analogRead(BUTTON_PIN) != 0){
-    Serial.println(F("Ecran 3"));
+    //Serial.println(F("Ecran 3")); //Debug
     u8g2.clearBuffer();
     calculDonnees();
     afficherEcran3();
