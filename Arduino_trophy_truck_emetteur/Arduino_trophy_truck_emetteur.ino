@@ -6,7 +6,6 @@
 //Capteur 1: D2
 //Capteur 2: D3
 
-#define PIN_NTC A0
 #define PIN_TENSION A1
 #define PIN_SWITCH 5 //Switch demarreur
 #define PIN_CONTACT 4
@@ -18,9 +17,9 @@ int rpm1, rpm2;
 int oldtime1, oldtime2=0;
 int time1, time2;
 int vitesse;
-float vin = 0.0;
-int TensionBatterie = 0;
 int pourcentageBatterie = 0;
+double tempMoteur;
+double tempElectronique;
 
 //Switch
 bool switchStarter = false;
@@ -29,15 +28,14 @@ int channel4;
 
 const int R1 = 2;
 const int R2 = 3;
-double Rref = 10000.0; //Résistance de référence à 25°C
-double V_IN = 5.0; //Alimentation électrique
-double celsius;
+const double Rref = 10000.0; //Résistance de référence à 25°C
+const double V_IN = 5.0; //Alimentation électrique
  
 //Information de la thermistance
-double A_1 = 3.354016E-3;
-double B_1 = 2.569850E-4;
-double C_1 = 2.620131E-6;
-double D_1 = 6.383091E-8;
+const double A_1 = 3.354016E-3;
+const double B_1 = 2.569850E-4;
+const double C_1 = 2.620131E-6;
+const double D_1 = 6.383091E-8;
 
 void isr2(){
   rev2++;
@@ -58,9 +56,9 @@ double SteinhartHart(double R){
   return pow(equation, -1);
 }
 
-void temperatureCalcul(){
+double temperatureCalcul(int pin){
   //Calcul de la tension sur la borne analogique
-  double valeurAnalog = analogRead(PIN_NTC);
+  double valeurAnalog = analogRead(pin);
   double V =  valeurAnalog / 1024 * V_IN;
  
   //Calcul de la résistance de la thermistance
@@ -68,51 +66,27 @@ void temperatureCalcul(){
  
   //Calcul de la température en kelvin( Steinhart and Hart)
   double kelvin = SteinhartHart(Rth);
-  celsius = kelvin - 273.15; //Conversion en celsius
+  return kelvin - 273.15; //Conversion en celsius
 }
 
-void tension(){
-   //Calcul de la tension de la batterie
-   TensionBatterie = analogRead(PIN_TENSION);
-   vin = (TensionBatterie * 12.6) / 1000; 
-   Serial.print("Tension entrée : ");
-   Serial.println(vin);
-   if (vin < 0.09) {
-      vin = 0.0;  //Déclaration pour annuler la lecture indésirable !
-   }
-   pourcentageBatterie = ((vin - 11.1) / (12.6 - 11.1)) * 100;
-
-  if (pourcentageBatterie > 100){
-    pourcentageBatterie = 100;
-  }else if(pourcentageBatterie < 0){
-    pourcentageBatterie = 0;
+int calculTension(){
+  int TensionBatterie = 0;
+  float vin = 0.0;
+  int res = 0;
+  //Calcul de la tension de la batterie
+  TensionBatterie = analogRead(PIN_TENSION);
+  vin = (TensionBatterie * 12.6) / 1000; 
+  if (vin < 0.09) {
+    vin = 0.0;  //Déclaration pour annuler la lecture indésirable !
   }
-}
+  res = ((vin - 11.1) / (12.6 - 11.1)) * 100;
 
-void displayDebug(){
-  Serial.print("Contact : ");
-  Serial.println(!switchContact);
-
-  Serial.print("Starter : ");
-  Serial.println(switchStarter);
-
-  Serial.print("Valeur switch : ");
-  Serial.println(channel4);
-
-  Serial.print("RPM : ");
-  Serial.println(rpm1, DEC);
-
-  Serial.print("Tension batterie : ");
-  Serial.println(vin);
-  
-  Serial.print("Temperature : ");
-  Serial.println(celsius);
-
-  Serial.print("RPM : ");
-  Serial.println(rpm1);
-
-  Serial.print("Vitesse : ");
-  Serial.println(vitesse);
+  if (res > 100){
+    res = 100;
+  }else if(res < 0){
+    res = 0;
+  }
+  return res;
 }
 
 void checkSwitch(){
@@ -128,15 +102,11 @@ void checkSwitch(){
   }
   if (switchStarter){
     digitalWrite(PIN_DEMARREUR, HIGH); //5v sur D7 => switch demarreur activé
-    /*Serial.print("Switch Demarreur ");
-    Serial.println(switchStarter);*/
   } else {
     digitalWrite(PIN_DEMARREUR, LOW);
   }
   if (switchContact){
     digitalWrite(PIN_CONTACT, HIGH); //5v sur D4 => switch contact activé 
-    /*Serial.print("Switch Contact ");
-    Serial.println(switchContact);*/
   } else {
     digitalWrite(PIN_CONTACT, LOW);
   }
@@ -156,34 +126,38 @@ void setup ()
  
 void loop ()
 {
-  int valeur[6];
-  //displayDebug();
+  int valeur[7];
   checkSwitch();
-  temperatureCalcul();
+
   //Capteur 1 : RPM
   detachInterrupt(0);           //detaches the interrupt
-  time1=millis()-oldtime1;        //finds the time 
-  rpm1=(rev1/time1)*60000;         //calculates rpm
-  oldtime1=millis();             //saves the current time
-  rev1=0;
+  time1 = millis() - oldtime1;        //finds the time 
+  rpm1 = (rev1 / time1) * 60000;         //calculates rpm
+  oldtime1 = millis();             //saves the current time
+  rev1 = 0;
   
   attachInterrupt(0, isr1, RISING);
 
   //Capteur 2 : Vitesse
   detachInterrupt(1);           //detaches the interrupt
-  time2=millis()-oldtime2;        //finds the time 
-  rpm2=(rev2/time2)*60000;         //calculates rpm
-  oldtime2=millis();             //saves the current time
-  rev2=0;
+  time2 = millis() - oldtime2;        //finds the time 
+  rpm2 = (rev2 / time2) * 60000;         //calculates rpm
+  oldtime2 = millis();             //saves the current time
+  rev2 = 0;
   rpm2 = rpm2/9;
-  vitesse = 0.12*PI*0.15*rpm2;
+  vitesse = 0.12 * PI * 0.15 * rpm2;
 
+  tempMoteur = temperatureCalcul(0);
+  tempElectronique = temperatureCalcul(2);
+  pourcentageBatterie = calculTension();
   attachInterrupt(1, isr2, RISING);
+
+  //Initialisation des données à envoyer
   valeur[0] = rpm1;
   valeur[1] = vitesse;
-  valeur[2] = celsius;
-  tension();
+  valeur[2] = tempMoteur;
   valeur[3] = pourcentageBatterie;
+  valeur[6] = tempElectronique;
 
   switch (switchContact){
     case false:
@@ -203,6 +177,7 @@ void loop ()
       break;
   }
 
+  //Envoi des données
   vw_send((byte*)&valeur,sizeof(valeur)); 
   if (vw_tx_active() == true){
     Serial.println("Transmission effectuée");
