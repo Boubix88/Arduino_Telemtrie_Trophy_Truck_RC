@@ -1,5 +1,5 @@
-#include <VirtualWire.h>
-#include <VirtualWire_Config.h>
+#include <SPI.h>
+#include <RF24.h>
 #include <math.h>
 #include <arduino.h>
 
@@ -10,16 +10,26 @@
 #define PIN_SWITCH 5 //Switch demarreur
 #define PIN_CONTACT 4
 #define PIN_DEMARREUR 7
+#define PIN_VENTILO_MOTEUR 8
+#define PIN_VENTILO_ELECTRONIQUE 9
+#define LIMITE_TEMPERATURE_MOTEUR 50
+#define LIMITE_TEMPERATURE_ELECTRONIQUE 30
 
-float value1, value2=0;
-float rev1, rev2=0;
-int rpm1, rpm2;
+#define PIN_CE  10
+#define PIN_CSN 6
+
+#define tunnel  "PIPE1"
+
+RF24 radio(PIN_CE, PIN_CSN);
+
+const byte adresse[6] = tunnel;  // Adresse du récepteur
+unsigned long packetsSent = 0;
+
+//Rpm et Vitesse
+float rev1, rev2 = 0;
+int rpm2;
 int oldtime1, oldtime2=0;
 int time1, time2;
-int vitesse;
-int pourcentageBatterie = 0;
-double tempMoteur;
-double tempElectronique;
 
 //Switch
 bool switchStarter = false;
@@ -89,6 +99,26 @@ int calculTension(){
   return res;
 }
 
+int calculRpm(){
+  detachInterrupt(0); //detaches the interrupt
+  time1 = millis() - oldtime1; //finds the time 
+  oldtime1 = millis(); //saves the current time
+  rev1 = 0;
+  attachInterrupt(0, isr1, RISING);
+  return (rev1 / time1) * 60000;; //Calcul des rpm
+}
+
+int calculVitesse(){
+  detachInterrupt(1); //detaches the interrupt
+  time2 = millis() - oldtime2; //finds the time 
+  rpm2 = (rev2 / time2) * 60000; //calculates rpm
+  oldtime2 = millis(); //saves the current time
+  rev2 = 0;
+  rpm2 = rpm2/9;
+  attachInterrupt(1, isr2, RISING);
+  return 0.12 * PI * 0.15 * rpm2;
+}
+
 void checkSwitch(){
   channel4 = pulseIn(PIN_SWITCH, HIGH, 25000); // Lire ch1 (25 ms)
   if (channel4 > 1500 && channel4 < 1700){ //Si position switch 2 demarreur => on, contact => on
@@ -112,48 +142,56 @@ void checkSwitch(){
   }
 }
 
+void checkFan(double tempMoteur, double tempElec){
+  //Serial.print(tempElec);
+  if (tempMoteur > LIMITE_TEMPERATURE_MOTEUR){
+    digitalWrite(PIN_VENTILO_MOTEUR, HIGH);
+  } else {
+    digitalWrite(PIN_VENTILO_MOTEUR, LOW);
+  }
+  if (tempElec > LIMITE_TEMPERATURE_ELECTRONIQUE){
+    digitalWrite(PIN_VENTILO_ELECTRONIQUE, HIGH);
+  } else {
+    digitalWrite(PIN_VENTILO_ELECTRONIQUE, LOW);
+  }
+}
+
 void setup ()
 {
   Serial.begin(9600);
-  vw_setup(400);
+
+  // Initialisation du module RF24
+  radio.begin();
+  radio.openWritingPipe(adresse);
+  radio.setPALevel(RF24_PA_HIGH);
+  radio.stopListening(); 
+
   attachInterrupt(0, isr1, RISING);
   attachInterrupt(1, isr2, RISING);
   pinMode(PIN_SWITCH, INPUT);  // ch4 sur Arduino pin5 switch
   pinMode(PIN_CONTACT, OUTPUT);
   pinMode(PIN_DEMARREUR, OUTPUT);
+  pinMode(PIN_VENTILO_MOTEUR, OUTPUT);
+  pinMode(PIN_VENTILO_ELECTRONIQUE, OUTPUT);
   switchContact = true;
 }
  
 void loop ()
 {
-  int valeur[7];
+  int valeur[9];
   checkSwitch();
 
-  //Capteur 1 : RPM
-  detachInterrupt(0);           //detaches the interrupt
-  time1 = millis() - oldtime1;        //finds the time 
-  rpm1 = (rev1 / time1) * 60000;         //calculates rpm
-  oldtime1 = millis();             //saves the current time
-  rev1 = 0;
-  
-  attachInterrupt(0, isr1, RISING);
-
-  //Capteur 2 : Vitesse
-  detachInterrupt(1);           //detaches the interrupt
-  time2 = millis() - oldtime2;        //finds the time 
-  rpm2 = (rev2 / time2) * 60000;         //calculates rpm
-  oldtime2 = millis();             //saves the current time
-  rev2 = 0;
-  rpm2 = rpm2/9;
-  vitesse = 0.12 * PI * 0.15 * rpm2;
-
-  tempMoteur = temperatureCalcul(0);
-  tempElectronique = temperatureCalcul(2);
-  pourcentageBatterie = calculTension();
-  attachInterrupt(1, isr2, RISING);
-
   //Initialisation des données à envoyer
-  valeur[0] = rpm1;
+  int rpm = calculRpm();
+  int vitesse = calculVitesse();
+  double tempMoteur = temperatureCalcul(A0);
+  double tempElectronique = temperatureCalcul(A2);
+  int pourcentageBatterie = calculTension();
+
+  checkFan(tempMoteur, tempElectronique);
+
+  //Copie des données dans valeur
+  valeur[0] = rpm;
   valeur[1] = vitesse;
   valeur[2] = tempMoteur;
   valeur[3] = pourcentageBatterie;
@@ -177,10 +215,38 @@ void loop ()
       break;
   }
 
-  //Envoi des données
-  vw_send((byte*)&valeur,sizeof(valeur)); 
-  if (vw_tx_active() == true){
-    Serial.println("Transmission effectuée");
+  // Envoyer un paquet de contrôle tous les 10 envois
+  if (packetsSent % 10 == 0) {
+    Serial.println("Envoi d'un packet de controle");
+    valeur[7] = packetsSent; // Contenu du paquet de contrôle : nombre de paquets envoyés
+    valeur[8] = 500;
+
+    packetsSent = 0; // On remet à 0;
+  } else {
+    valeur[7] = 0;
+    valeur[8] = 0;
   }
-  vw_wait_tx();
+
+  // Envoi des données via RF24
+  //radio.write(&valeur, sizeof(valeur));
+  if (radio.write(&valeur, sizeof(valeur))) {
+    Serial.println("Données envoyées avec succès !");
+    packetsSent++; // Incrémente le compteur de paquets envoyés
+    // Attendre la réponse du récepteur (acknowledgment)
+    if (radio.isAckPayloadAvailable()) {
+      byte ackPayloadSize = radio.getDynamicPayloadSize();
+      byte ackPayload[ackPayloadSize];
+      radio.read(&ackPayload, ackPayloadSize);
+      Serial.print("Réponse du récepteur : ");
+      /*for (byte i = 0; i < ackPayloadSize; i++) {
+        Serial.print(ackPayload[i]);
+        Serial.print(" ");
+      }
+      Serial.println();*/
+    } else {
+      Serial.println("Pas de réponse du récepteur");
+    }
+  } else {
+    Serial.println("Erreur lors de l'envoi des données");
+  }
 }

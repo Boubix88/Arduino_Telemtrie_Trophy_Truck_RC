@@ -1,6 +1,6 @@
-#include <Wire.h>
+#include <SPI.h>
+#include <RF24.h>
 #include <U8g2lib.h>
-#include <VirtualWire.h>
 #include <Arduino.h>
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
@@ -9,6 +9,17 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 #define PIN_TENSION A0
 // SDK --> A5
 // SDA --> A4
+
+#define PIN_CE  9
+#define PIN_CSN 10
+
+#define tunnel  "PIPE1"
+
+RF24 radio(PIN_CE, PIN_CSN);
+
+const byte adresse[6] = tunnel; // Adresse du récepteur, doit correspondre à l'adresse de l'émetteur
+unsigned long packetsSentByTransmitter = 0;
+unsigned long packetsReceived = 0;
 
 #define POLICE_PRINCIPALE u8g2_font_osb18_tn
 #define POLICE_CHIFFRES u8g2_font_lubR18_tr
@@ -194,9 +205,30 @@ static const unsigned char thermoElectro[] PROGMEM = { //26x16
 
 unsigned char* listOfLoad[9] = { Load_2, Load_3, Load_4, Load_5, Load_6, Load_7, Load_8, Load_2, Load_3 };
 
+// Icones reseau
+static const unsigned char icon_reseau_1[] PROGMEM = {
+   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+   0x03, 0x00, 0x07, 0x00, 0x0f, 0x00, 0x0f, 0x00 
+};
+
+static const unsigned char icon_reseau_2[] PROGMEM = {
+   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+   0x07, 0x00, 0x1f, 0x00, 0x7f, 0x00, 0xff, 0x00, 0xfc, 0x00, 0xf0, 0x01,
+   0xe3, 0x01, 0xe7, 0x03, 0xcf, 0x03, 0xcf, 0x03 
+};
+
+static const unsigned char icon_reseau_3[] PROGMEM = {
+   0x0f, 0x00, 0x7f, 0x00, 0xff, 0x01, 0xff, 0x03, 0xf8, 0x07, 0xc0, 0x0f,
+   0x87, 0x1f, 0x1f, 0x3f, 0x7f, 0x3e, 0xff, 0x7c, 0xfc, 0x78, 0xf0, 0x79,
+   0xe3, 0xf9, 0xe7, 0xf3, 0xcf, 0xf3, 0xcf, 0xf3
+};
+
+float packetLossPercentage = 0;
+int signal = -1;
+
 //Variables pour la reception du signal
-int valeur[7];
-byte wireless = sizeof(valeur);
+int valeur[9];
 
 float vin = 0.0;
 int pourcentageBatterie = 0;
@@ -270,25 +302,41 @@ void initAffichage3(){
 }
 
 void afficherSignal1(){
+  calculSignal();
+
   u8g2.setDrawColor(1); 
   u8g2.setFont(u8g2_font_unifont_t_77); 
   u8g2.drawGlyph(18, 15, 9981); //Affiche un icone de pompe à essence
-  if (valeur[2] > 28){
+  if (valeur[2] > 50){
     u8g2.drawXBMP(37, 0, 16, 16, Fan); //Ventilo moteur
   }
-  if (valeur[6] > 28){
+  if (valeur[6] > 30){
     u8g2.drawXBMP(56, 0, 16, 16, Fan); //Ventilo electronique
   }
   if (valeur[4] == 1){
     u8g2.setFont(u8g2_font_open_iconic_thing_2x_t); 
     u8g2.drawGlyph(75, 16, 67); //Affiche un icone de clef
   }
-  if (valeur[5] == 1){
+  if (valeur[0] > 0){
     u8g2.setFont(u8g2_font_open_iconic_embedded_2x_t);
     u8g2.drawGlyph(94, 16, 78); //Affiche un icone de demarrer
   }
-  u8g2.setFont(u8g2_font_open_iconic_www_2x_t);  
-  u8g2.drawGlyph(112, 16, 72); //Affiche un icone de reseau
+  /*u8g2.setFont(u8g2_font_open_iconic_www_2x_t);  
+  u8g2.drawGlyph(112, 16, 72); //Affiche un icone de reseau*/
+
+  switch (signal){
+    case 1:
+      u8g2.drawXBMP(112, 0, 16, 16, icon_reseau_1);
+      break;
+    
+    case 2:
+      u8g2.drawXBMP(112, 0, 16, 16, icon_reseau_2);
+      break;
+
+    case 3:
+      u8g2.drawXBMP(112, 0, 16, 16, icon_reseau_3);
+      break;
+  }
 }
 
 void afficherSignal2(){
@@ -301,11 +349,11 @@ void tension(){
   int TensionBatterie = 0;
   // BATTERIE -- Lecture de la tension de la batterie sur le Pin A0
    TensionBatterie = analogRead(PIN_TENSION);
-   vin = (TensionBatterie*4.75)/1000; 
+   vin = (TensionBatterie*5.8)/1000; 
    if (vin < 0.09) {
       vin = 0.0;//Déclaration pour annuler la lecture indésirable !
    }
-   pourcentageBatterie = ((vin - 3.7)/(4.12-3.7))*100;
+   pourcentageBatterie = ((vin - 4)/(5.8 - 4))*100;
 
    /*Serial.print(F("Batterie : "));
    Serial.println(vin);*/
@@ -357,13 +405,12 @@ void afficherDemarrage(){
 }
 
 void afficherEcran1(){  
-  //On attend max 600ms de recevoir un message
-  vw_wait_rx_max(600);
 
-  if (vw_get_message((byte*)&valeur, &wireless) == false){
+  if (!radio.available()) {
     afficherSignal2();
     initAffichage1();
   }else {
+    radio.read(&valeur, sizeof(valeur));
     afficherSignal1();
     if (valeur[5] == 1){
       pre();
@@ -371,12 +418,20 @@ void afficherEcran1(){
     } else { 
       initAffichage1();
       char text[5];
-      sprintf(text, "%d", valeur[0]);  
+      if (valeur[0] == 0) {
+        strncpy(text, "--", sizeof(text));
+      } else {
+        sprintf(text, "%d", valeur[0]);  
+      }
       u8g2.setCursor(64,38);
       u8g2.setFont(POLICE_PRINCIPALE);  
       u8g2.print(text);
 
-      sprintf(text, "%d", valeur[1]);  
+      if (valeur[1] == 0) {
+        strncpy(text, "--", sizeof(text));
+      } else {
+        sprintf(text, "%d", valeur[1]);  
+      }
       u8g2.setCursor(35,64);
       u8g2.print(text);
     }
@@ -384,15 +439,14 @@ void afficherEcran1(){
 }
 
 void afficherEcran2(){
-  //On attend max 1s de recevoir un message
-  vw_wait_rx_max(600);
   tension();
 
-  if (vw_get_message((byte*)&valeur, &wireless) == false){
+  if (!radio.available()) {
     afficherSignal2();
     initAffichage2();
-  afficherBatterie();
+    afficherBatterie();
   } else {
+    radio.read(&valeur, sizeof(valeur));
     afficherSignal1();
     if (valeur[5] == 1){
       pre();
@@ -404,11 +458,19 @@ void afficherEcran2(){
       u8g2.setFont(POLICE_PRINCIPALE);
     
       char text[3];
-      sprintf(text, "%d", valeur[2]); 
+      if (valeur[2] <= -20) {
+        strncpy(text, "--", sizeof(text));
+      } else {
+        sprintf(text, "%d", valeur[2]);  
+      }
       u8g2.setCursor(32, 38); 
       u8g2.print(text);
 
-      sprintf(text, "%d", valeur[6]); 
+      if (valeur[6] <= -20) {
+        strncpy(text, "--", sizeof(text));
+      } else {
+        sprintf(text, "%d", valeur[6]);  
+      }
       u8g2.setCursor(32, 64); 
       u8g2.print(text);
     }
@@ -416,14 +478,13 @@ void afficherEcran2(){
 }
 
 void afficherEcran3(){
-  //On attend max 1s de recevoir un message
-  vw_wait_rx_max(600);
 
-  if (vw_get_message((byte*)&valeur, &wireless) == false){
+  if (!radio.available()) {
     afficherSignal2();
     initAffichage3();
     afficherDonnees();
   }else {
+    radio.read(&valeur, sizeof(valeur));
     afficherSignal1();
     if (valeur[5] == 1){
       pre();
@@ -439,30 +500,44 @@ void afficherDonnees(){
   u8g2.setFont(u8g2_font_6x12_tr);  
 
   char text[8];
-  sprintf(text, "%d", rpmMax); 
+  if (rpmMax == 0){
+    strncpy(text, "--", sizeof(text));
+  } else {
+    sprintf(text, "%d", rpmMax); 
+  }
   u8g2.setCursor(50,24);
   u8g2.print(text);
 
-  sprintf(text, "%d", vitesseMax); 
+  if (vitesseMax == 0){
+    strncpy(text, "--", sizeof(text));
+  } else {
+    sprintf(text, "%d", vitesseMax); 
+  }
   u8g2.setCursor(40,37);
   u8g2.print(text);
 
-  sprintf(text, "%d", temperatureMax); 
+  if (temperatureMax == 0){
+    strncpy(text, "--", sizeof(text));
+  } else {
+    sprintf(text, "%d", temperatureMax); 
+  }
   u8g2.setCursor(60,50);
   u8g2.print(text);
 
-  sprintf(text, "%d", (char)tempsDeRoulage); 
-  Serial.print(F("Temps : "));
-  Serial.println(text);
+  if (tempsDeRoulage == 0){
+    strncpy(text, "--", sizeof(text));
+  } else {
+    sprintf(text, "%d", (char)tempsDeRoulage);
+  } 
+  /*Serial.print(F("Temps : "));
+  Serial.println(text);*/
   u8g2.setCursor(75,63);
   u8g2.print(text);
 }
 
 void afficherBatterie(){
   u8g2.setFont(u8g2_font_battery19_tn);
-  if (vin >= 4.12){
-    u8g2.drawGlyph(115, 64, 54);
-  }else if (pourcentageBatterie == 0){
+  if (pourcentageBatterie == 0){
     u8g2.drawGlyph(115, 64, 48);
   }else if (pourcentageBatterie > 0 && pourcentageBatterie <= 20){
     u8g2.drawGlyph(115, 64, 49);
@@ -476,7 +551,7 @@ void afficherBatterie(){
     u8g2.drawGlyph(115, 64, 53);
   }
   
-  if (pourcentageBatterie == 0){
+  if (valeur[3] == 0){
     u8g2.drawGlyph(115, 40, 48);
   }else if (valeur[3] > 0 && valeur[3] <= 20){
     u8g2.drawGlyph(115, 40, 49);
@@ -497,8 +572,8 @@ void afficherBatterie(){
 }
 
 void calculDonnees(){
-  if (valeur[5] == 1){
-    tempsDeRoulage += 0.6;
+  if (valeur[0] > 0){
+    tempsDeRoulage += 0.1;
   }
   if (valeur[0] > rpmMax){
     rpmMax = valeur[0];
@@ -511,14 +586,55 @@ void calculDonnees(){
   }
 }
 
+void calculSignal(){
+    // Vérifier si le paquet reçu est un paquet de contrôle
+    if (valeur[8] == 500) { // Remplacez 0xFFFFFFFF par une valeur spécifique pour le paquet de contrôle
+      // Extrait le nombre de paquets envoyés du paquet de contrôle
+      packetsSentByTransmitter = valeur[7];
+      /*Serial.print(F("Paquets envoyés : "));
+      Serial.print(packetsSentByTransmitter);
+
+      Serial.print(F("  --  Paquets recus : "));
+      Serial.println(packetsReceived);*/
+
+      // Calculer le pourcentage de paquets reçus
+      //float packetLossPercentage = 100.0 * (1.0 - static_cast<float>(packetsReceived) / packetsSentByTransmitter);
+      packetLossPercentage = ((packetsSentByTransmitter - packetsReceived) * 100) / packetsSentByTransmitter;
+      if (packetLossPercentage <= 0){
+        packetLossPercentage = 0;
+      } else if (packetLossPercentage >= 100) {
+        packetLossPercentage = 100;
+      }
+      /*Serial.print(F("Paquets perdus : "));
+      Serial.print((int)packetLossPercentage);
+      Serial.println(F("%"));*/
+
+      packetsReceived = 0; // On remet à 0
+    } else {
+      packetsReceived++;
+    }
+
+    if((int)packetLossPercentage >= 67 &&  (int)packetLossPercentage < 100){
+      signal = 1;
+    } else if((int)packetLossPercentage >= 34 &&  (int)packetLossPercentage < 67){
+      signal = 2;
+    } else if((int)packetLossPercentage >= 0 &&  (int)packetLossPercentage < 34){
+      signal = 3;
+    }
+}
+
 void setup(){
   Serial.begin(9600);
-  vw_setup(400);
-  vw_rx_start();
   u8g2.begin();
   u8g2.enableUTF8Print();
   u8g2.setDisplayRotation(U8G2_R2);
   afficherEcranDemarrage();
+
+  // Initialisation du module RF24
+  radio.begin();
+  radio.openReadingPipe(0, adresse); // Ouvre le canal 1 avec l'adresse de l'émetteur
+  radio.setPALevel(RF24_PA_HIGH);
+  radio.startListening(); // Démarre l'écoute des données
 }
 
 void loop(){
@@ -528,21 +644,25 @@ void loop(){
     calculDonnees();
     afficherEcran1();
     u8g2.sendBuffer();
+    delay(100);
   }
 
   delay(500);
   afficherTransition();
+  u8g2.clearBuffer();
 
-  while (analogRead(BUTTON_PIN) != 0){
-    //Serial.println(F("Ecran 2")); //Debug
+  while (analogRead(BUTTON_PIN) != 0) {
+    //Serial.println(F("Ecran 2")); // Debug
     u8g2.clearBuffer();
     calculDonnees();
     afficherEcran2();
     u8g2.sendBuffer();
+    delay(100);
   }
 
   delay(500);
   afficherTransition();
+  u8g2.clearBuffer();
 
   while (analogRead(BUTTON_PIN) != 0){
     //Serial.println(F("Ecran 3")); //Debug
@@ -550,8 +670,10 @@ void loop(){
     calculDonnees();
     afficherEcran3();
     u8g2.sendBuffer();
+    delay(100);
   }
 
   delay(500);
   afficherTransition();
+  u8g2.clearBuffer();
 }
